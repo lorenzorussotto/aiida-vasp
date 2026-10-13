@@ -70,7 +70,7 @@ from aiida_vasp.assistant.parameters import (
     ParametersMassage,
 )
 from aiida_vasp.calcs.vasp import VaspCalculation
-from aiida_vasp.common import parameters_validator, warn_deprecated_options
+from aiida_vasp.common import parameters_validator, validate_incar_tags, warn_deprecated_options
 from aiida_vasp.common.dryrun import get_jobscheme
 from aiida_vasp.data.potcar import PotcarData
 from aiida_vasp.protocols import ProtocolMixin, recursive_merge
@@ -211,7 +211,12 @@ class VaspWorkChain(BaseRestartWorkChain, WithBuilderUpdater, ProtocolMixin):
 
         # Use a custom validator for backward compatibility
         # This needs to be removed in the next major release/formalized workchain interface
-        spec.inputs.validator = validate_calc_job_custom
+        def validate_inputs(inputs: Any, ctx) -> Optional[str]:
+            return validate_calc_job_custom(inputs, ctx) or validate_incar_tags(
+                inputs, cls._default_unsupported_parameters
+            )
+
+        spec.inputs.validator = validate_inputs
         spec.inputs['calc']['metadata']['options']['resources']._required = False
         spec.inputs['calc']._required = False
 

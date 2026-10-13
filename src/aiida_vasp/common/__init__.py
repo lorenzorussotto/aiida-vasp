@@ -70,12 +70,35 @@ def parameters_validator(node: orm.Dict | None, port: Any = None) -> None:
     if OVERRIDE_NAMESPACE not in pdict:
         raise InputValidationError(f'Would expect some incar tags supplied under {OVERRIDE_NAMESPACE} key!')
 
+    # The INCAR tags themselves are checked by `validate_incar_tags`, which also sees the
+    # `settings` input and therefore the tags declared in `settings['unsupported_parameters']`.
+
+
+def validate_incar_tags(inputs: Any, default_unsupported_parameters: dict) -> str | None:
+    """Validate the INCAR tags of the `parameters` input by passing them through the massager.
+
+    Tags declared in `settings['unsupported_parameters']` (or, if none are declared, the workchain's
+    `default_unsupported_parameters`) are accepted, as in `VaspWorkChain.init_inputs`.
+
+    :return: string with error message in case the tags are invalid
+    """
+    parameters = inputs.get('parameters')
+    if not parameters:
+        return None
+
+    settings = inputs['settings'].get_dict() if inputs.get('settings') else {}
+    if settings.get('skip_parameters_validation'):
+        return None
+    unsupported_parameters = settings.get('unsupported_parameters', default_unsupported_parameters)
+
     accepted_namespaces = _BASE_NAMESPACES + [OVERRIDE_NAMESPACE]
+    pdict = convert_dict_case(parameters.get_dict(), lower=True)
     new_dict = {key: value for key, value in pdict.items() if key in accepted_namespaces}
     try:
-        ParametersMassage(new_dict)
-    except Exception as error:
-        raise InputValidationError(f'Cannot validate the input parameters - error from massager: {error}')
+        ParametersMassage(new_dict, unsupported_parameters)
+    except Exception as error:  # pylint: disable=broad-except
+        return f'Cannot validate the input parameters - error from massager: {error}'
+    return None
 
 
 def warn_deprecated_options(node: orm.Dict | None, port: Any = None) -> None:
